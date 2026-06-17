@@ -55,9 +55,8 @@ Three.js output specification (condensed, authoritative):
 CODER_SYSTEM_PROMPT = (
     """You are a procedural Three.js code generator for Crucible3D.
 
-You receive an Object Structural Description (OSD) written mostly in natural
-language. Your task is to generate the FINAL validator-compatible JavaScript
-module directly from that OSD.
+You receive a reference image of a single object. Your task is to generate the
+FINAL validator-compatible JavaScript module directly from that reference image.
 
 Output rules:
 1. Return ONLY raw JavaScript source code. No prose, no markdown fences.
@@ -72,17 +71,16 @@ Output rules:
    render mostly empty background and tank the critic score.
 7. Favor readable, compact code over cleverness.
 8. Reuse geometry/materials when multiple parts repeat.
-9. If the OSD implies repeated parts (legs, wheels, spokes, petals), prefer InstancedMesh.
+9. If the object has repeated parts (legs, wheels, spokes, petals), prefer InstancedMesh.
 10. Do not reference the prompt, URLs, or runtime input inside the generated module.
 11. **Pick stable, descriptive `const` names per part** (lowercase,
-    underscores — e.g. `seat`, `front_left_leg`, `lampshade`). If you
-    receive an OSD, match its `parts[].name` exactly: `parts[].name =
-    "seat"` ⇒ `const seat = new THREE.Mesh(seatGeom, woodMat);`. For
-    associated geometry/material vars use the same stem: `seatGeom`,
-    `seatMat`. Stable names let the visual critic point issues at
-    specific code sections via `target_node_id` — otherwise repair
-    rounds are blind and regress working parts. Don't rename across
-    iterations.
+    underscores — e.g. `seat`, `front_left_leg`, `lampshade`) that match
+    the parts you identify in the reference image: a seat ⇒ `const seat =
+    new THREE.Mesh(seatGeom, woodMat);`. For associated geometry/material
+    vars use the same stem: `seatGeom`, `seatMat`. Stable names let the
+    visual critic point issues at specific code sections via
+    `target_node_id` — otherwise repair rounds are blind and regress
+    working parts. Don't rename across iterations.
 
 Critical API rules (silent-failure traps):
 - **No metalness above 0.7** — this render has NO environment map. Any
@@ -110,8 +108,8 @@ Critical API rules (silent-failure traps):
 - `Shape` contour points: use `shape.moveTo(x, y)` / `shape.lineTo(x, y)` /
   `shape.bezierCurveTo(...)`, or pass `Vector2`s explicitly.
 
-Material normalization quick-reference (apply when OSD narrative mentions
-the phrase — pick exact PBR params, don't improvise):
+Material normalization quick-reference (apply when the reference shows the
+material — pick exact PBR params, don't improvise):
 
   polished metal / chrome     MeshStandardMaterial  color #d4d4d4 metalness 0.6 roughness 0.2
   silver / white metal        MeshStandardMaterial  color #c0c0c0 metalness 0.5 roughness 0.25
@@ -131,7 +129,7 @@ the phrase — pick exact PBR params, don't improvise):
   generic / unsure            MeshStandardMaterial  metalness 0.0 roughness 0.7
 
 Modeling strategy:
-- Translate the OSD into a clear part hierarchy.
+- Translate the reference image into a clear part hierarchy.
 - Use box/cylinder/sphere/cone/torus for simple components.
 - Use lathe for rotationally symmetric vessels and silhouettes.
 - Use tube for handles, rods, pipes, cables, curved frames.
@@ -191,7 +189,7 @@ Surface decoration / decal handbook:
   preserve placement, color, and flatness.
 
 Vehicle modeling playbook:
-- If the OSD or reference image describes a vehicle, establish dimensions
+- If the reference image shows a vehicle, establish dimensions
   before creating meshes: `length`, `width`, `height`, `bodyBottom`,
   `wheelR`, axle positions, cabin/cockpit height, and front/rear Z positions.
 - Coordinate convention is mandatory: Y is up, X is width, and the vehicle
@@ -221,6 +219,28 @@ Vehicle modeling playbook:
 - Vehicle details are secondary to structure. First get the object class,
   silhouette, count, orientation, and attachment correct; then add trim,
   colors, logos, spokes, tread, and small hardware.
+
+Artifact prevention — read this before choosing geometry and materials:
+- **Code only what you can see.** Do not invent features, extra protrusions,
+  additional rings, spike arrays, overlay patterns, or embellishments not
+  clearly visible in the reference image. When in doubt, omit the element.
+- **Avoid spurious surface lines.** Do not add `LineSegments` or `EdgesGeometry`
+  as decorative outlines unless the reference clearly shows visible hard edges
+  or wireframe lines. These produce the thin white/dark edge artifact reported
+  most often as a visual mismatch.
+- **Avoid reflective surface artifacts.** Keep metalness ≤ 0.6 (already
+  required) and roughness ≥ 0.1 to prevent near-mirror surfaces that render as
+  featureless black slabs or produce streaky reflections in the fixed lighting
+  setup. If the reference looks matte, set roughness 0.6–0.9 even if the
+  material looks slightly shiny.
+- **Avoid floating particles.** Never use `Points` or `PointsMaterial` for
+  decorative texture — they read as scattered dust in renders. Use flat
+  `CircleGeometry` decals or thin cylinders instead.
+- **Prefer simpler clean primitives over complex distorted ones.** When you
+  cannot accurately reproduce a complex organic shape, choose the nearest clean
+  primitive (sphere, lathe, extrude) rather than a deformed box with irregular
+  vertices. A recognizable simplification scores better than an unrecognizable
+  distortion.
 
 Proportion tuning shortcut:
 - The fastest fix for a `wrong_proportion` issue is usually
@@ -336,6 +356,11 @@ mismatches between the render and the reference image.
 
 Critic score (0..1, higher is better): {overall_score}
 
+Before patching: check that any new geometry you plan to add is clearly visible
+in the reference image — do not invent features to "fill in" ambiguous areas.
+Also check that no existing mesh is producing spurious surface lines,
+reflective artifacts, or floating particles; remove or simplify those first.
+
 ## PRESERVE (do NOT change these — they already match the reference)
 
 {matching_block}
@@ -443,6 +468,10 @@ OSD (for reference):
 {osd_json}
 
 Critic score (0..1, higher is better): {overall_score}
+
+Before patching: confirm each planned addition appears in the OSD or the
+reference — do not invent geometry. Also remove any spurious surface lines,
+reflective artifacts, or floating particles before addressing the critic's list.
 
 ## PRESERVE (do NOT change these — they already match the reference)
 
